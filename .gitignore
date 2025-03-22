@@ -1,0 +1,26 @@
+# Environment and dependency files
+*.env
+*.venv/
+*.virtualenv/
+Pipfile
+Pipfile.lock
+*.pyc
+*.pyo
+*.pyd
+
+# Logs and cache
+*.log
+*.cache/
+*.pytest_cache/
+__pycache__/
+
+# Jupyter Notebook files
+*.ipynb_checkpoints
+
+# IDE settings
+.vscode/
+.idea/
+*.iml
+
+# Streamlit config (if using)
+.streamlit/
