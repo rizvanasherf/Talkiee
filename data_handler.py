@@ -121,28 +121,41 @@ def track_progress(chat_history):
         return {
             "average_review_score": 0,
             "last_pitch_improvement": 0,
-            "last_pace_improvement": 0
+            "last_pace_improvement": 0,
+            "improvement_score":0,
+            "latest_point":0
         }
 
-    # ✅ Calculate average review score
+    # Calculate average review score
     total_sessions = len(chat_history)
     total_score = sum(entry["review_score"] for entry in chat_history)
     average_review_score = total_score / total_sessions
 
-    # ✅ Calculate last pitch and pace improvement
+    # Calculate last pitch and pace improvement
     if len(chat_history) > 1:
         latest_entry = chat_history[-1]
         previous_entry = chat_history[-2]
-
+        
         last_pitch_improvement = latest_entry["pitch"] - previous_entry["pitch"]
         last_pace_improvement = latest_entry["pace"] - previous_entry["pace"]
+        average_last_5 = chat_history[-6:-1] if len(chat_history) >= 6 else chat_history[:-1]
+        
+        avg_score =  sum(entry["review_score"] for entry in average_last_5) / len(average_last_5)
+        latest_score = latest_entry["review_score"]
+        
+        if avg_score != 0:
+            improvement_rate = ((latest_score - avg_score) / avg_score) * 100
+        else:
+            improvement_rate = 0  
     else:
         # If only one session, no improvement comparison
         last_pitch_improvement = 0
         last_pace_improvement = 0
-
+        improvement_rate = 0
     return {
         "average_review_score": average_review_score,
         "last_pitch_improvement": last_pitch_improvement,
-        "last_pace_improvement": last_pace_improvement
+        "last_pace_improvement": last_pace_improvement,
+        "improvement_score":improvement_rate,
+        "latest_point":latest_entry["review_score"]
     }

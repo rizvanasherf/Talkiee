@@ -91,8 +91,12 @@ def main():
             .stTabs [data-baseweb="tab"] {
                 flex: 1;
                 text-align: center;
+                font-size: 16px;
+                font-weight: bold;
                 justify-content: center;
                 color: silver;
+                border-bottom: 2px solid transparent;  /* Subtle border effect */
+                transition: all 0.3s ease-in-out;
             }
             .stButton > button {
                 position: relative;
@@ -309,11 +313,65 @@ def render_main_section():
     chat_history = load_chat_history()
     progress = track_progress(chat_history)
 
-    one, two = st.columns([6, 1])
-    with two:
-        review_score = progress["average_review_score"]
-        st.sidebar.metric(label="Average Score", value=f"{review_score:.1f}/10", delta=None)
+    review_score = progress["average_review_score"]
+    imporvement_rate = progress["improvement_score"]
+    latest_point = progress["latest_point"]
+    percentage_score = (review_score / 10) * 100
 
+    # Layout with columns
+    one, two = st.columns([6, 1])
+
+    with two:
+        with st.sidebar:
+            st.markdown(
+                f"""
+                <style>
+                .metric-box {{
+                    color: white;
+                    padding: 15px;
+                    border-radius: 10px;
+                    text-align: center;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                    margin-bottom: 10px;
+                }}
+                .metric-label {{
+                    font-size: 14px;
+                    font-weight: bold;
+                    color: #3d6aff;
+                }}
+                .metric-value {{
+                    font-size: 24px;
+                    font-weight: bold;
+                    color: #ffffff;
+                }}
+                </style>
+                
+                <div class="metric-box">
+                    <div class="metric-label"> AceScore </div>
+                    <div class="metric-value">{percentage_score:.1f}</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+            st.markdown(
+                f"""
+                <div class="metric-box">
+                    <div class="metric-label"> BoostFactor</div>
+                    <div class="metric-value">{imporvement_rate:.1f}</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+            st.markdown(
+                f"""
+                <div class="metric-box">
+                    <div class="metric-label">LastStrike</div>
+                    <div class="metric-value">{latest_point} pts</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+            
     st.markdown(
         """
         <div style="text-align: center; font-size: 20px; color:silver;  margin: 20px 0;">
