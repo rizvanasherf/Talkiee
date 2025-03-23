@@ -52,5 +52,14 @@
         "pitch": 0,
         "pace": 0,
         "review_score": 5
+    },
+    {
+        "timestamp": "2025-03-23 11:25:52",
+        "user_input": "hello who are you",
+        "spoken_text": "",
+        "feedback": "Hello! I'm a professional communication improvement coach. I'm here to help you enhance your verbal and written communication skills by providing feedback on tone, clarity, grammar, and delivery. How can I assist you today?",
+        "pitch": 0,
+        "pace": 0,
+        "review_score": 5
     }
 ]

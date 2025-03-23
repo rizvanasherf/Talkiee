@@ -316,8 +316,9 @@ def render_main_section():
 
     st.markdown(
         """
-        <div style="text-align: center; font-size: 20px; color:silver; font-weight: bold; margin: 20px 0;">
-            Talkiee.ai is tracking you!!!!
+        <div style="text-align: center; font-size: 20px; color:silver;  margin: 20px 0;">
+            Talkiee.ai is designed to help you track and improve your communication skills, whether through writing or speaking.
+            With Talkiee.ai, you can send messages and record your voice to receive feedback and enhance your abilities.
         </div>
         """,
         unsafe_allow_html=True

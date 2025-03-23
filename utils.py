@@ -4,7 +4,7 @@
 
 import speech_recognition as sr
 import librosa
-import requests
+from openai import OpenAI
 import numpy as np
 from dotenv import load_dotenv
 import os
@@ -26,7 +26,7 @@ def configure_llm():
     """Configure and validate API key for LLM.
     
     Returns:
-    - str: The LLM API key if found.
+    - str: The Open AI client 
     
     Raises:
     - ValueError: If the API key is not found in the environment variables.
@@ -34,7 +34,12 @@ def configure_llm():
     api_key = os.getenv("XAI_API_KEY")
     if not api_key:
         raise ValueError("API key not found")
-    return api_key
+
+    client = OpenAI(
+        api_key=api_key,
+        base_url="https://api.x.ai/v1"
+    )
+    return client
 
 def call_grok(prompt, max_retries=3, initial_backoff=1, multiplier=1.5):
     """
@@ -49,42 +54,25 @@ def call_grok(prompt, max_retries=3, initial_backoff=1, multiplier=1.5):
     Returns:
         - str: Grok response or error message.
     """
-    api_key = configure_llm()
-    grok_url = "https://api.x.ai/v1/chat/completions"
-
+    client  = configure_llm()
     retries = 0
     backoff = initial_backoff
 
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
-    }
-
-    payload = {
-        "model": "grok-2",  
-        "messages": [
-            {"role": "system", "content": "You are an AI assistant."},
-            {"role": "user", "content": prompt}
-        ],
-        "max_tokens": 1024,
-        "temperature": 0.7
-    }
-
     while retries < max_retries:
         try:
-            response = requests.post(grok_url, headers=headers, json=payload)
-
-            if response.status_code == 200:
-                data = response.json()
-                if "choices" in data and len(data["choices"]) > 0:
-                    return data["choices"][0]["message"]["content"]
-                else:
-                    return "No content in the response."
-
-            print(f"Error: {response.status_code} - {response.text}")
-            time.sleep(backoff)
-            retries += 1
-            backoff *= multiplier
+            response = client.chat.completions.create(
+                model="grok-2-latest",
+                messages=[
+                    {"role": "system", "content": "You are a professional communication skills trainer. Your role is to help users improve their verbal and written communication by providing clear, constructive feedback. Offer tips on clarity, tone, pacing, grammar, and professional delivery."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=1024,
+                temperature=0.7
+            )
+            if response and response.choices:
+                return response.choices[0].message.content
+            else:
+                return "No content in the response."
 
         except Exception as e:
             print(f"Unexpected error: {e}")
