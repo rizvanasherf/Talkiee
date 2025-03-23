@@ -63,7 +63,7 @@ def call_grok(prompt, max_retries=3, initial_backoff=1, multiplier=1.5):
             response = client.chat.completions.create(
                 model="grok-2-latest",
                 messages=[
-                    {"role": "system", "content": "You are a professional communication skills trainer. Your role is to help users improve their verbal and written communication by providing clear, constructive feedback. Offer tips on clarity, tone, pacing, grammar, and professional delivery."},
+                    {"role": "system", "content": "You are a Ai assisatant"},
                     {"role": "user", "content": prompt}
                 ],
                 max_tokens=1024,
