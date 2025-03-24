@@ -91,8 +91,12 @@ def main():
             .stTabs [data-baseweb="tab"] {
                 flex: 1;
                 text-align: center;
+                font-size: 16px;
+                font-weight: bold;
                 justify-content: center;
                 color: silver;
+                border-bottom: 2px solid transparent;  /* Subtle border effect */
+                transition: all 0.3s ease-in-out;
             }
             .stButton > button {
                 position: relative;
@@ -124,6 +128,24 @@ def main():
                 outline: none;
                 box-shadow: 0 0 10px rgba(61, 106, 255, 0.8);
             }
+            .metric-box {
+                    color: white;
+                    padding: 15px;
+                    border-radius: 10px;
+                    text-align: center;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                    margin-bottom: 10px;
+                }
+            .metric-label {
+                    font-size: 14px;
+                    font-weight: bold;
+                    color: #3d6aff;
+                }
+            .metric-value {
+                    font-size: 24px;
+                    font-weight: bold;
+                    color: #ffffff;
+                }
             .stTextArea {
                 color: #333;
                 padding: 10px;
@@ -149,6 +171,15 @@ def main():
                 margin-bottom: 20px;
                 padding: 20px 0;
                 font-family: 'Segoe UI', sans-serif;
+            }
+            .third_heading{
+                text-align: center;
+                font-size: 25px;
+                font-weight: bold;
+                color: silver;
+                margin-bottom: 20px;
+                padding: 20px 0;
+                font-family: 'Orbitron', sans-serif;
             }
             .chat-message {
                 padding: 1.5rem;
@@ -200,22 +231,31 @@ def main():
         """,
         unsafe_allow_html=True
     )
-
+    
+    if "current_tab" not in st.session_state:
+        st.session_state["current_tab"] = "Home"
+    
     tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
         ["Home", "Talkee.Ai", "Interview", "Narration", "Listening", "presentation"]
     )
 
     with tab1:
+        st.session_state["current_tab"] = "Home"
         home_page_render()
     with tab2:
+        st.session_state["current_tab"] = "Talkee.Ai"
         render_main_section()
     with tab3:
+        st.session_state["current_tab"] = "Interview"
         render_interview_section()
     with tab4:
+        st.session_state["current_tab"] = "Narration"
         storytelling_with_feedback()
     with tab5:
+        st.session_state["current_tab"] = "Listening"
         render_listening_section()
     with tab6:
+        st.session_state["current_tab"] = "Presentation"
         render_presentation_section()
 
 
@@ -299,6 +339,14 @@ def render_main_section():
 
     The function handles real-time feedback, audio synthesis, and chat history persistence.
     """
+    
+    if "current_tab" not in st.session_state:
+        st.session_state["current_tab"] = "Main"
+
+    if st.session_state["current_tab"] != "Main":
+        st.session_state["chat_history"] = []    
+        st.session_state["current_tab"] = "Main" 
+        
     st.markdown(
         """
         <h1 class="main-title">TALKIEE.AI</h1>
@@ -309,11 +357,52 @@ def render_main_section():
     chat_history = load_chat_history()
     progress = track_progress(chat_history)
 
-    one, two = st.columns([6, 1])
-    with two:
-        review_score = progress["average_review_score"]
-        st.sidebar.metric(label="Average Score", value=f"{review_score:.1f}/10", delta=None)
+    review_score = progress["average_review_score"]
+    imporvement_rate = progress["improvement_score"]
+    latest_point = progress["latest_point"]
+    percentage_score = (review_score / 10) * 100
 
+    # Layout with columns
+    one, two = st.columns([6, 1])
+
+    with two:
+        with st.sidebar:
+            st.markdown(
+                """
+                <div class="third_heading">
+                    Pace Tracker
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+            st.markdown(
+                f"""
+                <div class="metric-box" title="Average communication score based on recent sessions.">
+                    <div class="metric-label"> AceScore </div>
+                    <div class="metric-value">{percentage_score:.1f}</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+            st.markdown(
+                f"""
+                <div class="metric-box"  title="Rate of improvement compared to previous avg scores.">
+                    <div class="metric-label"> BoostFactor</div>
+                    <div class="metric-value">{imporvement_rate:.1f}%</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+            st.markdown(
+                f"""
+                <div class="metric-box" title="The score from your most recent session.">
+                    <div class="metric-label">LastStrike</div>
+                    <div class="metric-value">{latest_point} pts</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+            
     st.markdown(
         """
         <div style="text-align: center; font-size: 20px; color:silver;  margin: 20px 0;">
@@ -324,7 +413,7 @@ def render_main_section():
         unsafe_allow_html=True
     )
 
-    user_input = st.text_area("", placeholder="enter your message")
+    user_input = st.text_area("sent you message", placeholder="enter your message",label_visibility="hidden")
 
     col1, col2 = st.columns([6, 1])
     with col1:
@@ -403,6 +492,14 @@ def render_interview_section():
 
     The function handles voice synthesis, audio analysis, and chat history persistence.
     """
+    if "current_tab" not in st.session_state:
+        st.session_state["current_tab"] = "Interview"
+        
+    if st.session_state["current_tab"] != "Interview":
+        st.session_state["chat_history"] = []
+        st.session_state["current_question"] = get_hr_question()
+        st.session_state["current_tab"] = "Interview"
+        
     if "chat_history" not in st.session_state:
         st.session_state["chat_history"] = []
 
@@ -490,6 +587,13 @@ def storytelling_with_feedback():
 
     The function handles voice synthesis, audio analysis, and feedback presentation.
     """
+
+    if "current_tab" not in st.session_state:
+        st.session_state["current_tab"] = "Storytelling"
+    elif st.session_state["current_tab"] != "Storytelling":
+        st.session_state["story_feedback"] = ""
+        st.session_state["current_tab"] = "Storytelling"
+        
     st.markdown(
         """
         <div class='main-title'>
@@ -577,6 +681,11 @@ def render_listening_section():
     The function handles text-to-speech synthesis, audio playback, feedback generation, 
     and user interaction.
     """
+    if "current_tab" not in st.session_state:
+        st.session_state["current_tab"] = "Listening"
+    elif st.session_state["current_tab"] != "Listening":
+        st.session_state["current_tab"] = "Listening"
+        
     st.markdown("<h1 class='main-title'>Active Listening & Paraphrasing</h1>", unsafe_allow_html=True)
 
     passage = generate_passage()
@@ -595,7 +704,7 @@ def render_listening_section():
         unsafe_allow_html=True
     )
 
-    user_summary = st.text_area("", placeholder="Type your summary here...")
+    user_summary = st.text_area("your summary", placeholder="Type your summary here...",label_visibility="hidden")
     col1, col2, col3 = st.columns([1, 4, 1])
 
     with col3:
@@ -645,6 +754,11 @@ def render_presentation_section():
 
     The function handles text and audio processing, TTS synthesis, and real-time feedback generation.
     """
+    if "current_tab" not in st.session_state:
+        st.session_state["current_tab"] = "Presentation"
+    elif st.session_state["current_tab"] != "Presentation":
+        st.session_state["current_tab"] = "Presentation"
+
     st.markdown("<h1 class='main-title'>Presentation Assessment</h1>", unsafe_allow_html=True)
     st.markdown(
         """

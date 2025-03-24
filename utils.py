@@ -63,7 +63,7 @@ def call_grok(prompt, max_retries=3, initial_backoff=1, multiplier=1.5):
             response = client.chat.completions.create(
                 model="grok-2-latest",
                 messages=[
-                    {"role": "system", "content": "You are a professional communication skills trainer. Your role is to help users improve their verbal and written communication by providing clear, constructive feedback. Offer tips on clarity, tone, pacing, grammar, and professional delivery."},
+                    {"role": "system", "content": "You are a Ai assisatant"},
                     {"role": "user", "content": prompt}
                 ],
                 max_tokens=1024,
@@ -616,28 +616,44 @@ def generate_passage():
     Returns:
     - str: The generated passage or a fallback passage in case of API failure.
     """
+    subjects = [
+        "communication, collaboration, and empathy",
+        "leadership, decision-making, and conflict resolution",
+        "time management, productivity, and goal setting",
+        "adaptability, resilience, and creativity",
+        "problem-solving, critical thinking, and innovation",
+        "teamwork, collaboration, and motivation",
+        "personal growth, discipline, and self-awareness",
+        "influence, negotiation, and persuasion",
+        "public speaking, confidence, and presence"
+    ]
+
+   
+    random_subject = random.choice(subjects)
+    
     passage_prompt = (
-        "Generate three unique and insightful sentences about various professional skills such as "
-        "communication, leadership, time management, adaptability, collaboration, or problem-solving. "
-        "Ensure each sentence highlights a different skill and its impact in a workplace or personal growth context. "
-        "Keep the sentences clear, concise, and meaningful."
+        f"Generate three unique and insightful sentences about {random_subject}. "
+        "Ensure each sentence highlights a different aspect of the topic and its impact "
+        "in a workplace or personal growth context. Keep the sentences clear, concise, and meaningful."
     )
     
     try:
         response = call_grok(passage_prompt)
 
 
-        if isinstance(response, list):
-            passage = response[0] if response else "No valid passage generated."
-        elif isinstance(response, dict):
-            passage = response.get("content", "No valid passage generated.")
-        elif isinstance(response, str):
-            passage = response
+        if response:
+            if isinstance(response, list) and len(response) > 0:
+                passage = response[0]
+            elif isinstance(response, dict) and "content" in response:
+                passage = response["content"]
+            elif isinstance(response, str) and len(response.strip()) > 0:
+                passage = response
+            else:
+                passage = "No valid passage generated."
         else:
-            passage = "Unexpected response format."
-
-        # Fallback passage
-        if passage:
+            passage = "No valid passage generated."
+            
+        if passage and passage != "No valid passage generated.":
             return passage
         else:
             return (
