@@ -128,7 +128,7 @@ def speech_to_text():
         except Exception as e:
             return f"Unexpected error: {e}", None
 
-def analyze_audio(file_path):
+def analyze_audio(file_path,chunk_size=10):
     """
     Analyze the pitch and pace of the audio file.
     
@@ -140,20 +140,34 @@ def analyze_audio(file_path):
         - Average pitch in Hz.
         - Pace in words per second.
     """
+   # Load the audio file
     y, sr = librosa.load(file_path, sr=None)
+    total_duration = librosa.get_duration(y=y, sr=sr)
+    
+    pitches = []
+    paces = []
+    
 
-    # Pitch analysis
-    pitches, magnitudes = librosa.piptrack(y=y, sr=sr)
-    pitch_values = pitches[pitches > 0]
+    for start in range(0, int(total_duration), chunk_size):
+        end = min(start + chunk_size, total_duration)
+        chunk_y = y[int(start * sr):int(end * sr)]
+        
+        chunk_pitches, magnitudes = librosa.piptrack(y=chunk_y, sr=sr)
+        pitch_values = chunk_pitches[chunk_pitches > 0]
+        avg_pitch = np.mean(pitch_values) if len(pitch_values) > 0 else 0
 
-    avg_pitch = np.mean(pitch_values) if len(pitch_values) > 0 else 0
+        duration = librosa.get_duration(y=chunk_y, sr=sr)
+        
+        words = len(librosa.effects.split(chunk_y))  
+        pace = words / duration if duration > 0 else 0
+        pitches.append(avg_pitch)
+        paces.append(pace)
 
-    # Pace estimation (words/sec)
-    duration = librosa.get_duration(y=y, sr=sr)
-    words = len(librosa.effects.split(y))
-    pace = words / duration if duration > 0 else 0
-
-    return avg_pitch, pace
+    # Average results from all chunks
+    final_pitch = float(np.mean(pitches) if len(pitches) > 0 else 0)
+    final_pace =float(np.mean(paces) if len(paces) > 0 else 0)
+    
+    return final_pitch, final_pace
 
 def detect_filler_words(transcribed_text):
     """

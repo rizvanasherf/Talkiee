@@ -425,11 +425,11 @@ def render_main_section():
                 if spoken_text and audio_file:
                     pitch, pace = analyze_audio(audio_file)
                     st.write(spoken_text)
-                    feedback = get_voice_feedback(spoken_text, pitch, pace)
+                    feedback = get_voice_feedback(spoken_text, pitch, pace,st.session_state["chat_history"])
                     audio_file = text_to_speech(feedback)
                     st.audio(audio_file, format="audio/mp3")
                     os.remove(audio_file)
-                    save_chat_history_json(user_input, spoken_text, feedback, pitch, pace)
+                    save_chat_history_json(user_input, spoken_text, feedback, pitch, pace,)
                 else:
                     st.write("")
 
@@ -722,7 +722,8 @@ def render_listening_section():
                 )
                 feedback_audio = text_to_speech(feedback)
                 st.audio(feedback_audio, format="audio/mp3")
-                os.remove(feedback_audio)
+                if os.path.exists(feedback_audio):
+                    os.remove(feedback_audio)
             else:
                 st.write("Please enter a summary before requesting feedback.")
 
@@ -821,11 +822,15 @@ def render_presentation_section():
                     )
                     feedback_audio = text_to_speech(feedback)
                     st.audio(feedback_audio, format="audio/mp3")
-                    os.remove(feedback_audio)
-                os.remove(audio_path)
+                    if os.path.exists(feedback_audio):
+                        os.remove(feedback_audio)
+                if os.path.exists(audio_path):
+                    os.remove(audio_path)
             except ValueError as e:
                 st.error(f"Error processing audio: {e}")
-            os.remove(audio_path)
+            
+            if os.path.exists(audio_path):
+                os.remove(audio_path)
         else:
             st.error(
             f"Unsupported audio format: `{file_extension}`. Please upload mp3, WAV, FLAC, or AIFF audio files."
