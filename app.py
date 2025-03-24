@@ -172,6 +172,15 @@ def main():
                 padding: 20px 0;
                 font-family: 'Segoe UI', sans-serif;
             }
+            .third_heading{
+                text-align: center;
+                font-size: 25px;
+                font-weight: bold;
+                color: silver;
+                margin-bottom: 20px;
+                padding: 20px 0;
+                font-family: 'Orbitron', sans-serif;
+            }
             .chat-message {
                 padding: 1.5rem;
                 border-radius: 0.5rem;
@@ -358,6 +367,14 @@ def render_main_section():
 
     with two:
         with st.sidebar:
+            st.markdown(
+                """
+                <div class="third_heading">
+                    Pace Tracker
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
             st.markdown(
                 f"""
                 <div class="metric-box" title="Average communication score based on recent sessions.">
