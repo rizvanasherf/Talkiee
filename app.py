@@ -773,7 +773,7 @@ def render_presentation_section():
         unsafe_allow_html=True
     )
 
-    uploaded_file = st.file_uploader("Upload PDF, DOCX, or Audio (MP3/WAV)", type=["pdf", "docx", "mp3", "wav"])
+    uploaded_file = st.file_uploader("Upload PDF, DOCX, or Audio (flac/WAV)", type=["pdf", "docx", "mp3", "wav","flac", "aiff", "m4a"])
 
     if uploaded_file is not None:
         file_extension = uploaded_file.name.split(".")[-1].lower()
@@ -798,31 +798,38 @@ def render_presentation_section():
                 st.audio(feedback_audio, format="audio/mp3")
                 os.remove(feedback_audio)
 
-        elif file_extension in ["mp3", "wav"]:
+        elif file_extension in [ "wav", "flac", "aiff"]:
             audio_path = f"temp_audio.{file_extension}"
             with open(audio_path, "wb") as f:
                 f.write(uploaded_file.getbuffer())
 
-            spoken_text, pitch, pace = analyze_uploaded_audio(audio_path)
-            if spoken_text:
-                st.markdown("<h2>Transcribed Presentation:</h2>", unsafe_allow_html=True)
-                st.write(spoken_text)
-                feedback = get_presentation_feedback(spoken_text, pitch, pace)
-                st.markdown("<h2>✅ Presentation Feedback:</h2>", unsafe_allow_html=True)
-                st.markdown(
-                    f"""
-                    <div class="chat-message assistant-message">
-                        <div class="message-header">Feedback</div>
-                        <div class="message-content">{feedback}</div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
-                feedback_audio = text_to_speech(feedback)
-                st.audio(feedback_audio, format="audio/mp3")
-                os.remove(feedback_audio)
+            try:
+                spoken_text, pitch, pace = analyze_uploaded_audio(audio_path)
+                if spoken_text:
+                    st.markdown("<h2>Transcribed Presentation:</h2>", unsafe_allow_html=True)
+                    st.write(spoken_text)
+                    feedback = get_presentation_feedback(spoken_text, pitch, pace)
+                    st.markdown("<h2>✅ Presentation Feedback:</h2>", unsafe_allow_html=True)
+                    st.markdown(
+                        f"""
+                        <div class="chat-message assistant-message">
+                            <div class="message-header">Feedback</div>
+                            <div class="message-content">{feedback}</div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+                    feedback_audio = text_to_speech(feedback)
+                    st.audio(feedback_audio, format="audio/mp3")
+                    os.remove(feedback_audio)
+                os.remove(audio_path)
+            except ValueError as e:
+                st.error(f"Error processing audio: {e}")
             os.remove(audio_path)
-
+        else:
+            st.error(
+            f"Unsupported audio format: `{file_extension}`. Please upload mp3, WAV, FLAC, or AIFF audio files."
+            )
 
 if __name__ == "__main__":
     main()
