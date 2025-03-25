@@ -80,6 +80,13 @@ OPENAI_API_KEY=your_openai_api_key
 ```bash
 streamlit run app.py
 ```
+---
+
+## 🎥 **Demo Video**
+[![Watch the Demo](https://img.youtube.com/vi/G-Iv1iqowYU/0.jpg)](https://youtu.be/G-Iv1iqowYU)  
+[👉 Watch Demo](https://youtu.be/G-Iv1iqowYU)
+
+---
 
 ## 💡 Usage Examples
 
