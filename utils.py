@@ -4,12 +4,15 @@
 
 import speech_recognition as sr
 import librosa
+import aiohttp
+import asyncio
 from openai import OpenAI
 import numpy as np
 from dotenv import load_dotenv
 import os
 import re
 from gtts import gTTS
+import functools
 import tempfile
 import PyPDF2
 import docx
@@ -19,10 +22,11 @@ import random
 # -------------------------
 # 1. CONFIGURATION
 # -------------------------
+_GLOBAL_LLM_CLIENT = None
 
 load_dotenv()
 
-def configure_llm():
+async def configure_llm():
     """Configure and validate API key for LLM.
     
     Returns:
@@ -31,57 +35,69 @@ def configure_llm():
     Raises:
     - ValueError: If the API key is not found in the environment variables.
     """
+    global _GLOBAL_LLM_CLIENT
+    
     api_key = os.getenv("XAI_API_KEY")
     if not api_key:
         raise ValueError("API key not found")
 
-    client = OpenAI(
+    _GLOBAL_LLM_CLIENT = OpenAI(
         api_key=api_key,
         base_url="https://api.x.ai/v1"
     )
-    return client
+    return _GLOBAL_LLM_CLIENT
 
-def call_grok(prompt, max_retries=3, initial_backoff=1, multiplier=1.5):
+async def call_grok(prompt, max_retries=3):
     """
-    Call Grok API with retries and exponential backoff.
+    Asynchronous Grok API call with retries.
 
     Args:
-        - prompt (str): The prompt to send to Grok.
-        - max_retries (int): Maximum number of retries.
-        - initial_backoff (int): Initial wait time between retries.
-        - multiplier (int): Factor by which backoff increases.
+    - prompt (str): The prompt.
+    - max_retries (int): Maximum retries.
+    - timeout (int): Timeout for the request.
 
     Returns:
-        - str: Grok response or error message.
+    - str: Grok response.
     """
-    client  = configure_llm()
-    retries = 0
-    backoff = initial_backoff
-
-    while retries < max_retries:
+    global _GLOBAL_LLM_CLIENT
+    if _GLOBAL_LLM_CLIENT is None:
         try:
-            response = client.chat.completions.create(
-                model="grok-2-latest",
-                messages=[
-                    {"role": "system", "content": "You are a Ai assisatant"},
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=1024,
-                temperature=0.7
+           await  configure_llm()
+        except Exception as config_error:
+            return f"Configuration Error: {config_error}"
+    payload = {
+        "model": "grok-2-latest",
+        "messages": [
+            {"role": "system", "content": "You are an AI assistant"},
+            {"role": "user", "content": prompt}
+        ],
+        "max_tokens": 512,    
+        "temperature": 0.7
+    }
+
+    for attempt in range(max_retries):
+        try:
+            response = await asyncio.to_thread(
+                _GLOBAL_LLM_CLIENT.chat.completions.create,
+                **payload
             )
             if response and response.choices:
                 return response.choices[0].message.content
             else:
-                return "No content in the response."
+            
+                continue
 
         except Exception as e:
-            print(f"Unexpected error: {e}")
-            time.sleep(backoff)
-            retries += 1
-            backoff *= multiplier
+            print(f"API Call Error (Attempt {attempt + 1}/{max_retries}): {e}")
+            if hasattr(e, 'http_status') and e.http_status == 429:
+                print("Rate limit exceeded. Backing off.")
+                await asyncio.sleep(2 ** attempt)
+                continue
+            elif hasattr(e, 'type') and e.type == 'invalid_request_error':
+                print("Invalid request. Check your payload.")
+                break
 
-    print("Exceeded maximum retries. Check your quota and try again later.")
-    return "Exceeded retries. Please try again later."
+    return "Failed to get a response after multiple attempts."
 
 # -------------------------
 # 2. AUDIO INPUT & ANALYSIS
@@ -106,12 +122,10 @@ def speech_to_text():
 
     with sr.Microphone() as source:
         try:
-            recognizer.adjust_for_ambient_noise(source, duration=1) 
+            recognizer.adjust_for_ambient_noise(source, duration=0.5) 
             
             print("Listening...")
             audio = recognizer.listen(source, timeout=5, phrase_time_limit=60)
-
-            # Save audio for analysis
             audio_file = "temp_audio.wav"
             with open(audio_file, "wb") as f:
                 f.write(audio.get_wav_data())
@@ -142,6 +156,7 @@ def analyze_audio(file_path,chunk_size=10):
     """
    # Load the audio file
     y, sr = librosa.load(file_path, sr=None)
+<<<<<<< HEAD
     total_duration = librosa.get_duration(y=y, sr=sr)
     
     pitches = []
@@ -168,7 +183,18 @@ def analyze_audio(file_path,chunk_size=10):
     final_pace =float(np.mean(paces) if len(paces) > 0 else 0)
     
     return final_pitch, final_pace
+=======
+    pitches, magnitudes = librosa.piptrack(y=y, sr=sr)
+    pitch_values = pitches[pitches > 0]
+    avg_pitch = np.mean(pitch_values) if len(pitch_values) > 0 else 0
+    duration = librosa.get_duration(y=y, sr=sr)
+    words = len(librosa.effects.split(y))
+    pace = words / duration if duration > 0 else 0
 
+    return avg_pitch, pace
+>>>>>>> refactor1
+
+@functools.lru_cache(maxsize=100)
 def detect_filler_words(transcribed_text):
     """
     Identify and count filler words in transcribed text.
@@ -187,7 +213,8 @@ def detect_filler_words(transcribed_text):
     filler_count = len(fillers)
     return fillers, filler_count
 
-def analyze_uploaded_audio(file_path, status_callback=None):
+
+def analyze_uploaded_audio(file_path, status_callback=None,chunk_duration=30):
     """
     Analyze pitch, pace, and transcribe the uploaded audio file.
     
@@ -212,29 +239,39 @@ def analyze_uploaded_audio(file_path, status_callback=None):
     
     # Transcribe the audio
     recognizer = sr.Recognizer()
+    full_transcription = ""
 
     with sr.AudioFile(file_path) as source:
-        audio = recognizer.record(source)
-    
-    if status_callback:
-        status_callback("Analyzing speech...")
-        
-    spoken_text = recognizer.recognize_google(audio, language="en-US")
+        audio_length = int(librosa.get_duration(path=file_path))
+        for offset in range(0, audio_length, chunk_duration):
+            try:
+                audio = recognizer.record(source, duration=chunk_duration)
+                spoken_text = recognizer.recognize_google(audio, language="en-US")
+                
+                full_transcription += spoken_text + " "
+                
+            except sr.UnknownValueError:
+                full_transcription += "[Unclear Audio] "
+            except sr.RequestError as e:
+                full_transcription += f"[Error: {e}] "
+
+            if status_callback:
+                status_callback(f"Processed {min(offset + chunk_duration, audio_length)} of {audio_length} seconds")
     
     if status_callback:
         status_callback("Analyzing audio characteristics...")
-        
+
     # Analyze pitch and pace
     pitch, pace = analyze_audio(file_path)
 
-    return spoken_text, pitch, pace
+    return full_transcription.strip(), pitch, pace
 
 
 # -------------------------
 # 3. DOCUMENT PROCESSING
 # -------------------------
 
-
+@functools.lru_cache(maxsize=100)
 def extract_text_from_file(uploaded_file, file_extension):
     """
     Extract text from PDF or DOCX file.
@@ -254,13 +291,11 @@ def extract_text_from_file(uploaded_file, file_extension):
         text = ""
 
         if file_extension == "pdf":
-            # Extract text from PDF
             reader = PyPDF2.PdfReader(uploaded_file)
             for page in reader.pages:
                 text += page.extract_text() or ""
 
         elif file_extension == "docx":
-            # Extract text from DOCX
             doc = docx.Document(uploaded_file)
             for para in doc.paragraphs:
                 text += para.text + "\n"
@@ -298,7 +333,9 @@ def text_to_speech(response):
         tts = gTTS(text=response, lang='en')
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
         tts.save(temp_file.name)
-        return temp_file.name
+        audio_path = os.path.normpath(temp_file.name)
+        return audio_path
+
     except Exception as e:
         print(f"TTS Failed")
         return None
@@ -307,7 +344,6 @@ def text_to_speech(response):
 # -------------------------
 # 5. FEEDBACK GENERATION
 # -------------------------
-
 
 def get_text_feedback(text, chat_history):
     """
@@ -332,7 +368,7 @@ def get_text_feedback(text, chat_history):
         f"User: {text}\nAssistant:"
     )
 
-    response = call_grok(prompt)
+    response = asyncio.run(call_grok(prompt))
 
     if response:
         # Append to chat history
@@ -342,7 +378,7 @@ def get_text_feedback(text, chat_history):
         return response
     else:
         return "Failed to get a response from Talkiee."
-
+    
 def get_voice_feedback(text, pitch, pace, chat_history):
     """
     Send text and audio metrics to Grok and get vocal delivery feedback.
@@ -362,22 +398,20 @@ def get_voice_feedback(text, pitch, pace, chat_history):
     fillers, filler_count = detect_filler_words(text)
     
     prompt = (
-        f"You are a professional communication coach tasked with providing insightful feedback on vocal delivery. "
-        f"Analyze the following metrics:\n"
+        f"Vocal Delivery Analysis:\n"
         f"- Pitch: {pitch:.2f} Hz\n"
         f"- Pace: {pace:.2f} words/sec\n"
-        f"- Filler words: {', '.join(fillers)} (Total: {filler_count})\n\n"
-        f"Transcribed Text: {text}\n\n"
-        f"Provide structured feedback:\n"
-        f"1. **Positive Aspects**: Highlight what's working well.\n"
-        f"2. **Areas for Improvement**: Identify specific aspects that could be enhanced.\n"
-        f"3. **Actionable Suggestions**: Offer practical tips to improve.\n"
-        f"Keep the tone encouraging, professional, and concise."
+        f"- Filler words: {', '.join(fillers)}\n\n"
+        f"Text Analyzed: {text}\n\n"
+        f"Feedback:\n"
+        f"1. Strengths: What works well\n"
+        f"2. Improvement Areas: Key communication gaps\n"
+        f"3. Practical Tips: Actionable advice\n"
+        "Tone: Encouraging, direct, constructive."
     )
 
-    response = call_grok(prompt)
+    response = asyncio.run(call_grok(prompt))
 
-    # Store the new exchange in the chat history
     chat_history.append(f"User: {text}")
     chat_history.append(f"Assistant: {response}")
 
@@ -404,21 +438,18 @@ def get_interview_feedback(text, pitch, pace, chat_history):
     fillers, filler_count = detect_filler_words(text)
 
     prompt = (
-        f"You are a seasoned HR interview expert providing detailed feedback on a candidate's performance. "
-        f"Analyze the following metrics:\n"
-        f"- **Pitch**: {pitch:.2f} Hz (indicates tone quality)\n"
-        f"- **Pace**: {pace:.2f} words/sec (indicates speaking speed)\n"
-        f"- **Filler words**: {', '.join(fillers)} (Total: {filler_count})\n\n"
-        f"🗨️ **Candidate's Answer:**\n{text}\n\n"
-        f"💡 Provide structured feedback:\n"
-        f"1. **Strengths:** Highlight the candidate's strong points (clarity, confidence, articulation).\n"
-        f"2. **Improvement Areas:** Identify specific areas where the candidate can improve (conciseness, clarity, tone).\n"
-        f"3. **Communication Tips:** Offer actionable suggestions for better responses.\n"
-        f"4. **Overall Impression:** Give an overall rating or impression on their interview readiness.\n"
-        f"Keep the tone professional, supportive, and clear."
+        f"As an HR interview expert, analyze candidate performance:\n"
+        f"- Pitch: {pitch:.2f} Hz\n"
+        f"- Pace: {pace:.2f} words/sec\n"
+        f"- Filler words: {', '.join(fillers)}\n\n"
+        f"Evaluate:\n"
+        f"1. Strengths: Key communication positives\n"
+        f"2. Improvement Areas: Specific communication gaps\n"
+        f"3. Actionable Advice: Practical communication tips\n"
+        f"4. Interview Readiness: Overall potential"
     )
 
-    response = call_grok(prompt)
+    response = asyncio.run(call_grok(prompt))
 
     # Store exchange in chat history
     chat_history.append(f"User: {text}")
@@ -445,55 +476,20 @@ def get_storytelling_feedback(text, pitch, pace, chat_history):
     fillers, filler_count = detect_filler_words(text)
 
     prompt = (
-    f"You are a masterful storyteller and literary critic. "
-    f"Your task is to evaluate the user's narrated story with a focus on **imagination, picturization, emotional impact, narrative flow, and vocabulary**. "
-    f"Consider the following audio metrics:\n"
-    f"- **Pitch:** {pitch:.2f} Hz (indicates tone quality)\n"
-    f"- **Pace:** {pace:.2f} words/sec (indicates speaking speed)\n"
-    f"- **Filler words:** {', '.join(fillers)} (Total: {filler_count})\n\n"
-    f"📖 **User's Story:**\n{text}\n\n"
-    f"💡 Provide detailed feedback by evaluating:\n"
-    
-    # 🖼️ **Picturization & Imagination**
-    f"1. **Picturization & Imagination:**\n"
-    f"   - Describe how vividly the story paints a picture. Are the scenes and settings well-described?\n"
-    f"   - Does it evoke visual, sensory, or emotional imagery effectively?\n\n"
-    
-    # 📚 **Narrative Flow & Structure**
-    f"2. **Narrative Flow & Structure:**\n"
-    f"   - Assess the overall coherence and progression of the story.\n"
-    f"   - Does the story have a clear beginning, middle, and end?\n"
-    f"   - Are there smooth transitions between scenes?\n"
-    f"   - Comment on the pacing: Is it engaging or does it feel rushed/dragged?\n\n"
-    
-    # 🎭 **Emotional Impact**
-    f"3. **Emotional Impact:**\n"
-    f"   - Analyze the emotional depth of the story.\n"
-    f"   - Does it effectively convey feelings (e.g., suspense, joy, sadness)?\n"
-    f"   - Are the characters relatable and their emotions believable?\n\n"
-    
-    # ✍️ **Language & Vocabulary**
-    f"4. **Language & Vocabulary:**\n"
-    f"   - Critique the richness and creativity of the vocabulary.\n"
-    f"   - Is the language expressive and engaging?\n"
-    f"   - Does it use descriptive or poetic language effectively?\n\n"
-    
-    # 🎙️ **Delivery & Expression**
-    f"5. **Delivery & Expression:**\n"
-    f"   - Comment on the voice delivery based on the pitch, pace, and filler words.\n"
-    f"   - Does the narration enhance or weaken the story's impact?\n"
-    f"   - Identify areas where voice modulation could improve engagement.\n\n"
-    
-    # 🌟 **Overall Evaluation**
-    f"6. **Overall Evaluation:**\n"
-    f"   - Provide a comprehensive summary of the strengths and areas for improvement.\n"
-    f"   - Suggest specific tips to enhance storytelling skills (e.g., pacing, descriptive language, emotional connection).\n"
-    f"   - Keep the tone **descriptive, engaging, and constructive**, offering thoughtful and insightful critique."
-)
+        f"Analyze the storytelling voice based on audio metrics:\n"
+        f"- Pitch: {pitch:.2f} Hz\n"
+        f"- Pace: {pace:.2f} words/sec\n"
+        f"- Filler words: {', '.join(fillers)}\n\n"
+        "Evaluate:\n"
+        "1. Voice Dynamics\n"
+        "2. Emotional Engagement\n"
+        "3. Narrative Rhythm\n"
+        "4. Storytelling Effectiveness\n\n"
+        "Provide brief, constructive feedback on storytelling performance."
+    )
 
-    response = call_grok(prompt)
+    response = asyncio.run(call_grok(prompt))
 
-    # Store the exchange in the chat history
     chat_history.append(f"User Story: {text}")
     chat_history.append(f"LLM Feedback: {response}")
 
@@ -515,10 +511,9 @@ def get_presentation_feedback(text, pitch, pace):
     if not text:
         return "No valid input detected."
 
-    # Detect filler words
     fillers, filler_count = detect_filler_words(text)
 
-    # Structured Prompt Sections
+
     audio_metrics = (
         f"- **Pitch:** {pitch:.2f} Hz (tone quality)\n"
         f"- **Pace:** {pace:.2f} words/sec (speaking speed)\n"
@@ -527,46 +522,20 @@ def get_presentation_feedback(text, pitch, pace):
 
     user_presentation = f"📊 **User's Presentation Content:**\n{text}"
 
-    feedback_criteria = """
-    💡 Provide detailed feedback by evaluating:
-    1. **Clarity & Structure:** 
-       - Is the presentation clear and easy to follow?
-       - Are the ideas structured logically with a proper introduction, body, and conclusion?
-
-    2. **Content Relevance & Depth:** 
-       - Does the content effectively cover the topic?
-       - Is it informative, relevant, and engaging?
-       - Does it avoid unnecessary tangents?
-
-    3. **Delivery & Tone:** 
-       - Assess the speaker's delivery style. 
-       - Is the tone confident, professional, and engaging?
-       - Are there noticeable pauses, hesitations, or filler words?
-
-    4. **Pace & Timing:** 
-       - Comment on the speaking pace.
-       - Is the pace too fast, too slow, or appropriate?
-       - Is the presentation effectively timed?
-
-    5. **Language & Vocabulary:** 
-       - Analyze the richness and professionalism of the language.
-       - Are the vocabulary and terminology suitable for the audience?
-
-    6. **Overall Evaluation:** 
-       - Summarize the strengths and areas for improvement.
-       - Offer practical suggestions to enhance presentation skills.
-       - Provide tips on refining clarity, delivery, and impact.
-    """
-
     prompt = (
-        f"You are a professional communication and presentation coach. "
-        f"Your task is to evaluate the user's spoken presentation in terms of **clarity, structure, delivery, and professionalism**.\n\n"
-        f"🔎 **Audio Metrics:**\n{audio_metrics}\n\n"
+       f"🔎 **Audio Metrics:**\n{audio_metrics}\n\n"
         f"{user_presentation}\n\n"
-        f"{feedback_criteria}"
+        f"💡 Evaluate the presentation focusing on:\n"
+        f"- Clarity & structure\n"
+        f"- Content relevance\n"
+        f"- Delivery & tone\n"
+        f"- Pace & timing\n"
+        f"- Language & vocabulary\n"
+        f"- Overall presentation skills\n"
+        f"📌 Provide actionable feedback with specific improvement suggestions."
     )
 
-    response = call_grok(prompt)
+    response = asyncio.run(call_grok(prompt))
     return response
 
 # -------------------------
@@ -604,11 +573,9 @@ def get_hr_question():
         "Ensure the question is clear, concise, and avoids technical or domain-specific content. "
         "Each time, the question should be distinct and creative."
     )
+ 
+    response = asyncio.run(call_grok(hr_prompt))
     
-    # Get the response
-    response = call_grok(hr_prompt)
-    
-    # Fallback in case of no response
     if not response:
         response = f"Describe a time when you faced a challenge related to {topic} and how you handled it."
 
@@ -652,7 +619,7 @@ def generate_passage():
     )
     
     try:
-        response = call_grok(passage_prompt)
+        response = asyncio.run(call_grok(passage_prompt))
 
 
         if response:
@@ -705,7 +672,7 @@ def get_summary_feedback(passage, user_summary):
     )
     
     try:
-        feedback_response = call_grok(feedback_prompt)
+        feedback_response = asyncio.run(call_grok(feedback_prompt))
 
         if feedback_response:
             return feedback_response
