@@ -79,5 +79,32 @@
         "pitch": 0,
         "pace": 0,
         "review_score": 6
+    },
+    {
+        "timestamp": "2025-03-25 11:43:14",
+        "user_input": "hello how are you",
+        "spoken_text": "",
+        "feedback": "Hello! I'm doing well, thank you. How about you? \n\nAs a communication coach, I'd like to offer some feedback on your message. It's great that you initiated the conversation with a greeting. However, to enhance clarity and formality, you might consider capitalizing the first letter of your sentences and adding punctuation at the end. For example, \"Hello, how are you?\" This small change can make your message appear more polished and respectful. \n\nFeel free to ask for more tips or share any specific communication challenges you're facing!",
+        "pitch": 0,
+        "pace": 0,
+        "review_score": 6
+    },
+    {
+        "timestamp": "2025-03-25 12:03:14",
+        "user_input": "hello, how are you doing\n",
+        "spoken_text": "",
+        "feedback": "Hello! I'm doing well, thank you. How about you? As a communication coach, I'm here to help you improve your verbal and written communication skills. If you have any specific areas you'd like to focus on or if you'd like feedback on your message, feel free to ask!",
+        "pitch": 0,
+        "pace": 0,
+        "review_score": 5
+    },
+    {
+        "timestamp": "2025-03-25 12:28:15",
+        "user_input": "can you help me to speak to my friends",
+        "spoken_text": "",
+        "feedback": "To help you speak more effectively with your friends, let's focus on a few key areas of communication. Please provide me with an example of a conversation you might have with your friends, and I'll give you feedback on tone, clarity, grammar, and delivery.\n\nFor instance, you could share a typical message or dialogue you use with your friends. Once you do that, I can analyze it and suggest improvements.",
+        "pitch": 0,
+        "pace": 0,
+        "review_score": 5
     }
 ]

@@ -557,7 +557,7 @@ def render_interview_section():
                     st.audio(feedback_audio, format="audio/mp3")
                     os.remove(feedback_audio)
                 else:
-                    st.write("")
+                    st.write("recoginzation failed")
 
     with col3:
         if st.button("Next"):
@@ -632,29 +632,30 @@ def storytelling_with_feedback():
 
                 if spoken_text and audio_file:
                     pitch, pace = analyze_audio(audio_file)
-                    st.markdown(
-                        f"""
-                        <div class="chat-message user-message">
-                            <div class="message-header">You</div>
-                            <div class="message-content">{spoken_text}</div>
-                        </div>
-                        """,
-                        unsafe_allow_html=True
-                    )
-                    feedback = get_storytelling_feedback(spoken_text, pitch, pace, st.session_state["chat_history"])
-                    st.markdown("<h2>✅ Feedback Result:</h2>", unsafe_allow_html=True)
-                    st.markdown(
-                        f"""
-                        <div class="chat-message assistant-message">
-                            <div class="message-header">Feedback</div>
-                            <div class="message-content">{feedback}</div>
-                        </div>
-                        """,
-                        unsafe_allow_html=True
-                    )
-                    feedback_audio = text_to_speech(feedback)
-                    st.audio(feedback_audio, format="audio/mp3")
-                    os.remove(feedback_audio)
+                    with col2:
+                        st.markdown(
+                            f"""
+                            <div class="chat-message user-message">
+                                <div class="message-header">You</div>
+                                <div class="message-content">{spoken_text}</div>
+                            </div>
+                            """,
+                            unsafe_allow_html=True
+                        )
+                        feedback = get_storytelling_feedback(spoken_text, pitch, pace, st.session_state["chat_history"])
+                        st.markdown("<h2>✅ Feedback Result:</h2>", unsafe_allow_html=True)
+                        st.markdown(
+                            f"""
+                            <div class="chat-message assistant-message">
+                                <div class="message-header">Feedback</div>
+                                <div class="message-content">{feedback}</div>
+                            </div>
+                            """,
+                            unsafe_allow_html=True
+                        )
+                        feedback_audio = text_to_speech(feedback)
+                        st.audio(feedback_audio, format="audio/mp3")
+                        os.remove(feedback_audio)
                 else:
                     st.write("")
 
@@ -711,18 +712,20 @@ def render_listening_section():
         if st.button("Get Feedback"):
             if user_summary.strip():
                 feedback = get_summary_feedback(passage, user_summary)
-                st.markdown("<h2>✅ Feedback:</h2>", unsafe_allow_html=True)
-                st.markdown(
-                    f"""
-                    <div class="feedback">
-                        <p>{feedback}</p>
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
-                feedback_audio = text_to_speech(feedback)
-                st.audio(feedback_audio, format="audio/mp3")
-                os.remove(feedback_audio)
+                with col2:
+                    st.markdown("<h2>Feedback:</h2>", unsafe_allow_html=True)
+                    st.markdown(
+                        f"""
+                        <div class="chat-message assistant-message">
+                            <div class="message-header">Feedback</div>
+                            <div class="message-content">{feedback}</div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+                    feedback_audio = text_to_speech(feedback)
+                    st.audio(feedback_audio, format="audio/mp3")
+                    os.remove(feedback_audio)
             else:
                 st.write("Please enter a summary before requesting feedback.")
 
@@ -825,7 +828,7 @@ def render_presentation_section():
                 os.remove(audio_path)
             except ValueError as e:
                 st.error(f"Error processing audio: {e}")
-            os.remove(audio_path)
+            
         else:
             st.error(
             f"Unsupported audio format: `{file_extension}`. Please upload mp3, WAV, FLAC, or AIFF audio files."

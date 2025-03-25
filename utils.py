@@ -4,6 +4,8 @@
 
 import speech_recognition as sr
 import librosa
+import aiohttp
+import asyncio
 from openai import OpenAI
 import numpy as np
 from dotenv import load_dotenv
@@ -16,13 +18,31 @@ import docx
 import time
 import random
 
+
+# -------------------------
+# 1. LOGGING DECORATOR
+# -------------------------
+def log_time(func):
+    """Decorator to log execution time of functions."""
+    def wrapper(*args, **kwargs):
+        start_time = time.time()
+        result = func(*args, **kwargs)
+        end_time = time.time()
+        
+        execution_time = end_time - start_time
+        print(f"{func.__name__} executed in {execution_time:.4f} seconds.")
+        
+        return result
+    return wrapper
+
 # -------------------------
 # 1. CONFIGURATION
 # -------------------------
 
 load_dotenv()
 
-def configure_llm():
+@log_time
+async def configure_llm():
     """Configure and validate API key for LLM.
     
     Returns:
@@ -41,52 +61,55 @@ def configure_llm():
     )
     return client
 
-def call_grok(prompt, max_retries=3, initial_backoff=1, multiplier=1.5):
+async def call_grok(prompt, max_retries=3, timeout=10):
     """
-    Call Grok API with retries and exponential backoff.
+    Asynchronous Grok API call with retries.
 
     Args:
-        - prompt (str): The prompt to send to Grok.
-        - max_retries (int): Maximum number of retries.
-        - initial_backoff (int): Initial wait time between retries.
-        - multiplier (int): Factor by which backoff increases.
+    - prompt (str): The prompt.
+    - max_retries (int): Maximum retries.
+    - timeout (int): Timeout for the request.
 
     Returns:
-        - str: Grok response or error message.
+    - str: Grok response.
     """
-    client  = configure_llm()
-    retries = 0
-    backoff = initial_backoff
+    client = await configure_llm()  # Use the configured OpenAI client
 
-    while retries < max_retries:
+    payload = {
+        "model": "grok-2-latest",
+        "messages": [
+            {"role": "system", "content": "You are an AI assistant"},
+            {"role": "user", "content": prompt}
+        ],
+        "max_tokens": 512,    
+        "temperature": 0.7
+    }
+
+    for attempt in range(max_retries):
         try:
-            response = client.chat.completions.create(
-                model="grok-2-latest",
-                messages=[
-                    {"role": "system", "content": "You are a Ai assisatant"},
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=1024,
-                temperature=0.7
+            # Use the client to call the Grok API directly (no need for headers)
+            response = await asyncio.to_thread(
+                client.chat.completions.create,
+                **payload
             )
+
             if response and response.choices:
                 return response.choices[0].message.content
             else:
-                return "No content in the response."
+                print(f"No content in response (Attempt {attempt + 1}/{max_retries})")
+                await asyncio.sleep(2)
 
         except Exception as e:
-            print(f"Unexpected error: {e}")
-            time.sleep(backoff)
-            retries += 1
-            backoff *= multiplier
+            print(f"Error: {e} (Retry {attempt + 1}/{max_retries})")
+            await asyncio.sleep(2)
 
-    print("Exceeded maximum retries. Check your quota and try again later.")
     return "Exceeded retries. Please try again later."
 
 # -------------------------
 # 2. AUDIO INPUT & ANALYSIS
 # -------------------------
 
+@log_time
 def speech_to_text():
     """
     Capture voice input from the microphone and transcribe it to text.
@@ -128,6 +151,7 @@ def speech_to_text():
         except Exception as e:
             return f"Unexpected error: {e}", None
 
+@log_time
 def analyze_audio(file_path):
     """
     Analyze the pitch and pace of the audio file.
@@ -155,6 +179,7 @@ def analyze_audio(file_path):
 
     return avg_pitch, pace
 
+@log_time
 def detect_filler_words(transcribed_text):
     """
     Identify and count filler words in transcribed text.
@@ -173,7 +198,8 @@ def detect_filler_words(transcribed_text):
     filler_count = len(fillers)
     return fillers, filler_count
 
-def analyze_uploaded_audio(file_path, status_callback=None):
+@log_time
+def analyze_uploaded_audio(file_path, status_callback=None,chunk_duration=30):
     """
     Analyze pitch, pace, and transcribe the uploaded audio file.
     
@@ -198,29 +224,40 @@ def analyze_uploaded_audio(file_path, status_callback=None):
     
     # Transcribe the audio
     recognizer = sr.Recognizer()
+    full_transcription = ""
 
     with sr.AudioFile(file_path) as source:
-        audio = recognizer.record(source)
-    
-    if status_callback:
-        status_callback("Analyzing speech...")
+        audio_length = int(librosa.get_duration(path=file_path))
         
-    spoken_text = recognizer.recognize_google(audio, language="en-US")
+        for offset in range(0, audio_length, chunk_duration):
+            try:
+                audio = recognizer.record(source, duration=chunk_duration)
+                spoken_text = recognizer.recognize_google(audio, language="en-US")
+                
+                full_transcription += spoken_text + " "
+                
+            except sr.UnknownValueError:
+                full_transcription += "[Unclear Audio] "
+            except sr.RequestError as e:
+                full_transcription += f"[Error: {e}] "
+
+            if status_callback:
+                status_callback(f"Processed {min(offset + chunk_duration, audio_length)} of {audio_length} seconds")
     
     if status_callback:
         status_callback("Analyzing audio characteristics...")
-        
+
     # Analyze pitch and pace
     pitch, pace = analyze_audio(file_path)
 
-    return spoken_text, pitch, pace
+    return full_transcription.strip(), pitch, pace
 
 
 # -------------------------
 # 3. DOCUMENT PROCESSING
 # -------------------------
 
-
+@log_time
 def extract_text_from_file(uploaded_file, file_extension):
     """
     Extract text from PDF or DOCX file.
@@ -269,7 +306,7 @@ def extract_text_from_file(uploaded_file, file_extension):
 # 4. AUDIO OUTPUT
 # -------------------------
 
-
+@log_time
 def text_to_speech(response):
     """
     Convert feedback text to speech and save it as an audio file.
@@ -294,7 +331,7 @@ def text_to_speech(response):
 # 5. FEEDBACK GENERATION
 # -------------------------
 
-
+@log_time
 def get_text_feedback(text, chat_history):
     """
     Send text to Grok and get general communication feedback.
@@ -318,7 +355,7 @@ def get_text_feedback(text, chat_history):
         f"User: {text}\nAssistant:"
     )
 
-    response = call_grok(prompt)
+    response = asyncio.run(call_grok(prompt))
 
     if response:
         # Append to chat history
@@ -328,7 +365,7 @@ def get_text_feedback(text, chat_history):
         return response
     else:
         return "Failed to get a response from Talkiee."
-
+@log_time
 def get_voice_feedback(text, pitch, pace, chat_history):
     """
     Send text and audio metrics to Grok and get vocal delivery feedback.
@@ -361,14 +398,14 @@ def get_voice_feedback(text, pitch, pace, chat_history):
         f"Keep the tone encouraging, professional, and concise."
     )
 
-    response = call_grok(prompt)
+    response = asyncio.run(call_grok(prompt))
 
     # Store the new exchange in the chat history
     chat_history.append(f"User: {text}")
     chat_history.append(f"Assistant: {response}")
 
     return response
-
+@log_time
 def get_interview_feedback(text, pitch, pace, chat_history):
     """
     Send interview response and audio metrics to Grok for HR interview feedback.
@@ -404,14 +441,14 @@ def get_interview_feedback(text, pitch, pace, chat_history):
         f"Keep the tone professional, supportive, and clear."
     )
 
-    response = call_grok(prompt)
+    response = asyncio.run(call_grok(prompt))
 
     # Store exchange in chat history
     chat_history.append(f"User: {text}")
     chat_history.append(f"Assistant: {response}")
 
     return response
-
+@log_time
 def get_storytelling_feedback(text, pitch, pace, chat_history):
     """
     Send story narration and audio metrics to Grok for storytelling feedback.
@@ -477,14 +514,14 @@ def get_storytelling_feedback(text, pitch, pace, chat_history):
     f"   - Keep the tone **descriptive, engaging, and constructive**, offering thoughtful and insightful critique."
 )
 
-    response = call_grok(prompt)
+    response = asyncio.run(call_grok(prompt))
 
     # Store the exchange in the chat history
     chat_history.append(f"User Story: {text}")
     chat_history.append(f"LLM Feedback: {response}")
 
     return response
-
+@log_time
 def get_presentation_feedback(text, pitch, pace):
     """
     Analyze presentation delivery and provide feedback with Grok.
@@ -513,52 +550,26 @@ def get_presentation_feedback(text, pitch, pace):
 
     user_presentation = f"📊 **User's Presentation Content:**\n{text}"
 
-    feedback_criteria = """
-    💡 Provide detailed feedback by evaluating:
-    1. **Clarity & Structure:** 
-       - Is the presentation clear and easy to follow?
-       - Are the ideas structured logically with a proper introduction, body, and conclusion?
-
-    2. **Content Relevance & Depth:** 
-       - Does the content effectively cover the topic?
-       - Is it informative, relevant, and engaging?
-       - Does it avoid unnecessary tangents?
-
-    3. **Delivery & Tone:** 
-       - Assess the speaker's delivery style. 
-       - Is the tone confident, professional, and engaging?
-       - Are there noticeable pauses, hesitations, or filler words?
-
-    4. **Pace & Timing:** 
-       - Comment on the speaking pace.
-       - Is the pace too fast, too slow, or appropriate?
-       - Is the presentation effectively timed?
-
-    5. **Language & Vocabulary:** 
-       - Analyze the richness and professionalism of the language.
-       - Are the vocabulary and terminology suitable for the audience?
-
-    6. **Overall Evaluation:** 
-       - Summarize the strengths and areas for improvement.
-       - Offer practical suggestions to enhance presentation skills.
-       - Provide tips on refining clarity, delivery, and impact.
-    """
-
     prompt = (
-        f"You are a professional communication and presentation coach. "
-        f"Your task is to evaluate the user's spoken presentation in terms of **clarity, structure, delivery, and professionalism**.\n\n"
-        f"🔎 **Audio Metrics:**\n{audio_metrics}\n\n"
+       f"🔎 **Audio Metrics:**\n{audio_metrics}\n\n"
         f"{user_presentation}\n\n"
-        f"{feedback_criteria}"
+        f"💡 Evaluate the presentation focusing on:\n"
+        f"- Clarity & structure\n"
+        f"- Content relevance\n"
+        f"- Delivery & tone\n"
+        f"- Pace & timing\n"
+        f"- Language & vocabulary\n"
+        f"- Overall presentation skills\n"
+        f"📌 Provide actionable feedback with specific improvement suggestions."
     )
 
-    response = call_grok(prompt)
+    response = asyncio.run(call_grok(prompt))
     return response
 
 # -------------------------
 # 6. CONTENT GENERATION
 # -------------------------
-
+@log_time
 def get_hr_question():
     """
     Get a unique HR interview question from Grok.
@@ -592,7 +603,7 @@ def get_hr_question():
     )
     
     # Get the response
-    response = call_grok(hr_prompt)
+    response = asyncio.run(call_grok(hr_prompt))
     
     # Fallback in case of no response
     if not response:
@@ -600,6 +611,7 @@ def get_hr_question():
 
     return response
 
+@log_time
 def generate_passage():
     """
     Generate a short passage using LLM for summarization exercises.
@@ -638,7 +650,7 @@ def generate_passage():
     )
     
     try:
-        response = call_grok(passage_prompt)
+        response = asyncio.run(call_grok(passage_prompt))
 
 
         if response:
@@ -666,6 +678,7 @@ def generate_passage():
         print(f"Error generating passage: {e}")
         return f"Error generating passage: {str(e)}"
 
+@log_time
 def get_summary_feedback(passage, user_summary):
     """
     Get feedback on the user's summary compared to the original passage.
@@ -691,7 +704,7 @@ def get_summary_feedback(passage, user_summary):
     )
     
     try:
-        feedback_response = call_grok(feedback_prompt)
+        feedback_response = asyncio.run(call_grok(feedback_prompt))
 
         if feedback_response:
             return feedback_response
