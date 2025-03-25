@@ -106,5 +106,32 @@
         "pitch": 0,
         "pace": 0,
         "review_score": 5
+    },
+    {
+        "timestamp": "2025-03-25 13:11:27",
+        "user_input": "hello an you help me",
+        "spoken_text": "",
+        "feedback": "Hello! Yes, I can help you. It looks like you might have mistyped \"can\" as \"an.\" Let's work on enhancing your communication skills. What specific areas would you like to focus on today? Is it grammar, tone, clarity, or perhaps something else?",
+        "pitch": 0,
+        "pace": 0,
+        "review_score": 5
+    },
+    {
+        "timestamp": "2025-03-25 14:22:56",
+        "user_input": "hello how are you talkee.ai",
+        "spoken_text": "",
+        "feedback": "Hello! I'm doing well, thank you. It's great to see you here. How can I assist you today with your communication skills?",
+        "pitch": 0,
+        "pace": 0,
+        "review_score": 6
+    },
+    {
+        "timestamp": "2025-03-25 14:40:43",
+        "user_input": "i am going to ernakulam net day .and i am busy too",
+        "spoken_text": "",
+        "feedback": "Your message conveys your plans and busy schedule, but there are a few areas where we can improve clarity, grammar, and tone to make your communication more effective. Here's a revised version:\n\n**Original Message:**\n\"i am going to ernakulam net day .and i am busy too\"\n\n**Revised Message:**\n\"I am going to Ernakulam next day, and I will be busy as well.\"\n\n**Feedback:**\n\n1. **Clarity:**\n   - \"net day\" should be \"next day\" for clarity. It's important to use common phrases to avoid confusion.\n   - Consider adding more context if necessary, such as the purpose of your trip or the duration of your stay, to make your message more informative.\n\n2. **Grammar:**\n   - Capitalize the first letter of the sentence: \"I\" instead of \"i.\"\n   - Use a comma before \"and\" to separate the two independent clauses: \"I am going to Ernakulam next day, and I will be busy as well.\"\n   - Ensure proper spacing after periods and commas.\n\n3. **Tone:**\n   - The revised message maintains a neutral and polite tone, which is suitable for most communications. If you're informing someone about your availability, this tone works well.\n   - If you want to sound more approachable or friendly, you could add a phrase like, \"Hope you understand!\"\n\n4. **Delivery:**\n   - Consider the medium of your communication. If it's a text message or an email, the revised message is concise and clear.\n   - If you're speaking, ensure your tone of voice matches the message's content to convey your busy schedule without sounding abrupt.\n\nBy implementing these suggestions, your communication will be more effective and professional. If you have any specific scenarios or additional messages you'd like feedback on, feel free to share!",
+        "pitch": 0,
+        "pace": 0,
+        "review_score": 5
     }
 ]
